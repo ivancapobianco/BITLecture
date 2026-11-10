@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Data Integration · Mini-games</title>
+<style>
+  :root { --txt:#3C3C41; --gold:#BAA874; --navy:#454B6A; --teal:#66ABB7; --yel:#F1E790; --mint:#D6E2DE;
+          --cream:#F7F4F1; --red:#C00D47; --green:#3E8E5E; --grey:#6B6B70; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:Calibri, "Segoe UI", Roboto, Arial, sans-serif; color:var(--txt); background:#fff; }
+  header { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; }
+  header b { color:var(--yel); font-size:13px; letter-spacing:.06em; display:block; }
+  header h1 { font-size:19px; margin:2px 0 0; font-weight:700; }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  .wait { text-align:center; padding:48px 12px; color:var(--grey); }
+  .wait .dot { width:14px; height:14px; border-radius:50%; background:var(--gold); margin:0 auto 18px; animation:p 1.4s infinite; }
+  @keyframes p { 50% { opacity:.25; transform:scale(.7);} }
+  .q { font-size:20px; font-weight:700; color:var(--navy); margin:4px 0 6px; }
+  .hint { font-size:14px; color:var(--grey); margin:0 0 14px; }
+  button { font:inherit; color:inherit; }
+  .btn { display:block; width:100%; border:0; border-radius:12px; padding:14px; font-size:17px; font-weight:700;
+         background:var(--navy); color:#fff; margin-top:16px; }
+  .btn:disabled { opacity:.4; }
+  .menu button { display:block; width:100%; text-align:left; border:1px solid var(--mint); background:var(--cream);
+                 border-radius:12px; padding:13px 14px; margin:8px 0; font-size:16px; }
+  /* matching */
+  .match { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:10px 34px; }
+  .match svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .col { display:flex; flex-direction:column; gap:10px; }
+  .it { min-height:52px; border:2px solid var(--mint); background:var(--cream); border-radius:12px; padding:8px 10px;
+        font-size:15px; text-align:left; line-height:1.2; position:relative; z-index:1; }
+  .it.sel { border-color:var(--navy); box-shadow:0 0 0 3px rgba(69,75,106,.25); }
+  .it.ok { border-color:var(--green) !important; }
+  .it.ko { border-color:var(--red) !important; }
+  /* table of errors */
+  .scroll { overflow-x:auto; border-radius:10px; border:1px solid var(--mint); }
+  table { border-collapse:collapse; font-size:14px; min-width:100%; }
+  th { background:var(--navy); color:#fff; padding:8px; text-align:left; white-space:nowrap; font-weight:600; }
+  td { padding:0; border-top:1px solid var(--mint); }
+  td button { width:100%; border:0; background:#fff; padding:11px 8px; text-align:left; white-space:nowrap; font-size:14px; }
+  td button.mark { background:#F6D9E2; color:var(--red); font-weight:700; }
+  td button.found { background:#DDEFE3; color:var(--green); font-weight:700; }
+  td button.miss { outline:2px dashed var(--red); outline-offset:-3px; }
+  td button.false { background:#eee; text-decoration:line-through; color:var(--grey); }
+  /* cards */
+  .card { border-radius:16px; background:var(--yel); padding:26px 18px; font-size:20px; font-weight:700; text-align:center;
+          min-height:130px; display:flex; align-items:center; justify-content:center; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  .two button, .opts button { border:0; border-radius:12px; padding:16px 6px; font-size:17px; font-weight:700; color:#fff; }
+  .prog { text-align:center; color:var(--grey); font-size:14px; margin-top:10px; }
+  .pair { border:1px solid var(--mint); border-radius:14px; padding:12px; margin-bottom:12px; background:var(--cream); }
+  .pair .rec { font-size:15px; background:#fff; border-radius:8px; padding:7px 9px; margin:4px 0; }
+  .opts { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; }
+  .opts button { background:#fff; color:var(--navy); border:2px solid var(--mint); padding:10px 2px; font-size:14px; }
+  .opts button.on { background:var(--navy); color:#fff; border-color:var(--navy); }
+  /* feedback */
+  .fb { margin-top:16px; }
+  .fb .score { font-size:22px; font-weight:800; color:var(--navy); margin-bottom:8px; }
+  .fb li { margin:6px 0; font-size:15px; line-height:1.3; }
+  .fb ul { padding-left:20px; margin:0; }
+  .ok-t { color:var(--green); font-weight:700; } .ko-t { color:var(--red); font-weight:700; }
+  .small { font-size:13px; color:var(--grey); margin-top:14px; }
+  .linkbtn { background:none; border:0; color:var(--teal); text-decoration:underline; font-size:14px; padding:6px 0; }
+</style>
+</head>
+<body>
+<header><b id="hdrsmall">DATA INTEGRATION · MINI-GAMES</b><h1 id="hdr">Welcome!</h1></header>
+<main id="app"></main>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+// ======================================================================
+// Game content (same as the slides). Edit here if you change the slides.
+// ======================================================================
+const GAMES = {
+  1: { title: "Which data type fits?", type: "match",
+       hint: "Tap a value on the left, then its data type on the right.",
+       pairs: [
+         ["Body weight 72.5 kg", "float", "A measured quantity with decimals – the unit goes in its own field."],
+         ["Number of previous operations", "integer", "You count them – there is no half operation."],
+         ["Smoker yes / no", "boolean", "Two states only (or NULL if nobody asked!)."],
+         ["Tumour grade G1–G3", "categorical – ordinal", "Ordered categories – not numbers you can average."],
+         ["Blood group A, B, AB, 0", "categorical – nominal", "Categories without an order."],
+         ["Postcode 01067", "string", "The trap: an identifier – the leading zero must survive."] ] },
+  2: { title: "Find the 5 errors", type: "errors",
+       hint: "Tap every cell that is wrong. Tap again to undo.",
+       head: ["patient_id", "born", "sex", "weight (kg)", "CRP (mg/L)"],
+       rows: [["4711", "1962-03-01", "M", "82", "12"],
+              ["4712", "03/15/1971", "F", "64", "8"],
+              ["4713", "1985-07-22", "F", "6.5", "5"],
+              ["4711", "1962-03-01", "M", "82", "12"],
+              ["4714", "1990-11-02", "male", "77", "9"],
+              ["4715", "2031-04-10", "M", "70", "15"]],
+       errors: [ { r: 1, c: 1, why: "Date written the American way → not consistent" },
+                 { r: 2, c: 3, why: "6.5 kg for an adult → not correct" },
+                 { r: 3, c: null, why: "The same patient twice → not unique" },
+                 { r: 4, c: 2, why: "'male' instead of 'M' → not consistent" },
+                 { r: 5, c: 1, why: "Born in 2031 → not correct" } ] },
+  3: { title: "OLTP or OLAP?", type: "sort", options: ["OLTP", "OLAP"],
+       hint: "Read each card and choose.",
+       cards: [ ["Nurse records a blood pressure value", "OLTP"], ["Average length of stay per ward, 2025", "OLAP"],
+                ["Answer needed in milliseconds", "OLTP"], ["Historical, aggregated data", "OLAP"],
+                ["Hundreds of users writing at once", "OLTP"], ["Star schema", "OLAP"],
+                ["Pharmacy dispenses a drug", "OLTP"], ["Quarterly report for the hospital board", "OLAP"],
+                ["Normalised tables", "OLTP"], ["Most prescribed antibiotic in winter?", "OLAP"] ],
+       trap: "Normalised tables make writing safe (OLTP); the star schema makes reading fast (OLAP). Structure follows purpose." },
+  4: { title: "Which format belongs to which data?", type: "match",
+       hint: "Tap a data source on the left, then its format on the right.",
+       pairs: [
+         ["CT image", "DICOM", "Grid of numbers + label (patient, date, device)."],
+         ["DNA from the sequencer", "FASTQ", "DNA letters as text, with a quality score."],
+         ["Lab result message", "HL7", "Text message, fields separated by |."],
+         ["Table exported from Excel", "CSV", "A table as plain text."],
+         ["Data from a web app", "JSON", "Nested objects and lists."],
+         ["Doctor's letter", "free text / PDF", "The richest source – and the least structured."] ] },
+  5: { title: "Same patient or not?", type: "choice", options: ["same", "different", "can't tell"],
+       hint: "Two records from two different systems. Decide for each pair.",
+       items: [ ["A", "Müller, Hans · 01.03.1962", "Mueller, Hans · 01.03.1962", ["same"], "ü written as ue – exact matching would miss it."],
+                ["B", "Müller, Hans · 01.03.1962", "Müller, Hans · 03.01.1962", ["can't tell"], "Day and month swapped is a classic error – check another identifier."],
+                ["C", "Schmidt, Anna · 12.05.1980 · Reutlingen", "Schmidt-Weber, Anna · 12.05.1980 · Tübingen", ["same", "can't tell"], "Probably the same: marriage and a move – but someone should confirm."],
+                ["D", "Meier, Lukas · 02.02.2001 · Hauptstr. 5", "Meier, Luca · 02.02.2001 · Hauptstr. 5", ["different"], "Twins at the same address!"] ] },
+  6: { title: "Name it! Which term fits the definition?", type: "match",
+       hint: "Tap a term on the left, then its definition on the right.",
+       pairs: [
+         ["Primary key", "Unique ID of a row", "order_id, patient_id"],
+         ["Foreign key", "Points to another table", "orders.customer_id → customers"],
+         ["NULL", "No value recorded", "potassium not measured"],
+         ["OLAP", "Built for analysis", "'top sellers per region'"],
+         ["Normalisation", "Every fact stored once", "Hans moves → change one cell"],
+         ["Record linkage", "Same person, many systems", "Müller / Mueller"] ] }
+};
+
+// ======================================================================
+// Phone state
+// ======================================================================
+const app = document.getElementById("app");
+const COLORS = ["#66ABB7", "#BAA874", "#454B6A", "#C00D47", "#3E8E5E", "#8C6BB1"];
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+let CLIENT = store.get("di_client");
+if (!CLIENT) { CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set("di_client", CLIENT); }
+let session = null, shown = -1, fails = 0, offline = !API.enabled;
+const done = {};   // games already submitted in this session
+
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "html") e.innerHTML = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function setHeader(t, small) { document.getElementById("hdr").textContent = t; document.getElementById("hdrsmall").textContent = small || "DATA INTEGRATION · MINI-GAMES"; }
+
+function send(game, items, noteEl) {
+  if (offline || !API.enabled) return;
+  API.submit(game, CLIENT, items).then(() => { noteEl.textContent = "✓ Your answers were sent – look at the screen."; })
+    .catch(() => { noteEl.textContent = "Your answers could not be sent – no problem, you can still see your result here."; });
+}
+
+// ======================================================================
+// Screens
+// ======================================================================
+function showWaiting() {
+  shown = 0; setHeader("Welcome!");
+  app.replaceChildren(el("div", { class: "wait" }, el("div", { class: "dot" }),
+    el("div", { style: "font-size:18px;font-weight:700;color:#454B6A" }, "Keep this page open."),
+    el("p", {}, "The next game appears here as soon as your lecturer unlocks it."),
+    offlineLink()));
+}
+function showDone(n) {
+  shown = n; setHeader("Game " + n + " done", "MINI-GAME " + n + " / 6");
+  app.replaceChildren(el("div", { class: "wait" }, el("div", { style: "font-size:40px" }, "✓"),
+    el("div", { style: "font-size:18px;font-weight:700;color:#454B6A" }, "Thanks! Look at the screen."),
+    el("p", {}, "The next game will appear here automatically."), offlineLink()));
+}
+function offlineLink() {
+  return el("button", { class: "linkbtn", onclick: () => { offline = true; showMenu(); } }, "No connection? Choose the game yourself");
+}
+function showMenu() {
+  shown = -1; setHeader("Choose a game");
+  app.replaceChildren(el("p", { class: "hint" }, "Your lecturer tells you which game to open."),
+    el("div", { class: "menu" }, Object.entries(GAMES).map(([n, g]) =>
+      el("button", { onclick: () => renderGame(+n) }, "Game " + n + " · " + g.title))));
+}
+function backToMenu() { return offline ? el("button", { class: "linkbtn", onclick: showMenu }, "← all games") : null; }
+
+function renderGame(n) {
+  shown = n;
+  const g = GAMES[n];
+  setHeader(g.title, "MINI-GAME " + n + " / 6");
+  app.replaceChildren();
+  ({ match: gMatch, errors: gErrors, sort: gSort, choice: gChoice })[g.type](n, g);
+  window.scrollTo(0, 0);
+}
+function finish(n, items, fbEl) {
+  done[session + ":" + n] = true;
+  const note = el("div", { class: "small" });
+  fbEl.append(note);
+  send(n, items, note);
+}
+function score(items) {
+  const ok = items.filter(i => i.correct).length;
+  return el("div", { class: "score" }, ok + " / " + items.length + " correct");
+}
+
+// ---------- matching (tap left, then right) ----------
+function gMatch(n, g) {
+  const left = g.pairs.map(p => p[0]), right = shuffle(g.pairs.map(p => p[1]));
+  const pairs = {};               // left index -> right index
+  let sel = null, locked = false;
+  const wrap = el("div", { class: "match" });
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const L = left.map((t, i) => el("button", { class: "it", onclick: () => tapL(i) }, t));
+  const R = right.map((t, j) => el("button", { class: "it", onclick: () => tapR(j) }, t));
+  wrap.append(svg, el("div", { class: "col" }, L), el("div", { class: "col" }, R));
+  const btn = el("button", { class: "btn", onclick: check }, "Check");
+  const fb = el("div", { class: "fb" });
+  app.append(el("p", { class: "hint" }, g.hint), wrap, btn, fb, backToMenu());
+
+  function color(i) { return COLORS[Object.keys(pairs).map(Number).sort((a, b) => a - b).indexOf(i) % COLORS.length]; }
+  function tapL(i) {
+    if (locked) return;
+    if (i in pairs) { delete pairs[i]; sel = i; }
+    else sel = (sel === i ? null : i);
+    paint();
+  }
+  function tapR(j) {
+    if (locked) return;
+    const owner = Object.keys(pairs).find(k => pairs[k] === j);
+    if (sel === null) { if (owner !== undefined) delete pairs[owner]; paint(); return; }
+    if (owner !== undefined) delete pairs[owner];
+    pairs[sel] = j; sel = null; paint();
+  }
+  function paint() {
+    L.forEach((b, i) => { b.classList.toggle("sel", sel === i); b.style.borderColor = (i in pairs && !locked) ? color(i) : ""; });
+    R.forEach((b, j) => { const o = Object.keys(pairs).find(k => pairs[k] === j);
+      b.style.borderColor = (o !== undefined && !locked) ? color(+o) : ""; });
+    draw();
+  }
+  function draw() {
+    const box = wrap.getBoundingClientRect();
+    svg.replaceChildren();
+    for (const [i, j] of Object.entries(pairs)) {
+      const a = L[i].getBoundingClientRect(), b = R[j].getBoundingClientRect();
+      const ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      ln.setAttribute("x1", a.right - box.left); ln.setAttribute("y1", a.top + a.height / 2 - box.top);
+      ln.setAttribute("x2", b.left - box.left); ln.setAttribute("y2", b.top + b.height / 2 - box.top);
+      let c = color(+i);
+      if (locked) c = right[j] === g.pairs[i][1] ? "#3E8E5E" : "#C00D47";
+      ln.setAttribute("stroke", c); ln.setAttribute("stroke-width", "3"); ln.setAttribute("stroke-linecap", "round");
+      svg.append(ln);
+    }
+  }
+  window.addEventListener("resize", draw);
+  function check() {
+    locked = true; btn.disabled = true;
+    const items = g.pairs.map((p, i) => ({ item: (i + 1) + " · " + p[0], correct: i in pairs && right[pairs[i]] === p[1] }));
+    L.forEach((b, i) => b.classList.add(items[i].correct ? "ok" : "ko"));
+    paint();
+    fb.append(score(items), el("ul", {}, g.pairs.map((p, i) => el("li", {},
+      el("span", { class: items[i].correct ? "ok-t" : "ko-t" }, items[i].correct ? "✓ " : "✗ "),
+      el("b", {}, p[0] + " → " + p[1]), " – " + p[2]))));
+    finish(n, items, fb);
+  }
+}
+
+// ---------- spot the errors ----------
+function gErrors(n, g) {
+  const marked = new Set();
+  let locked = false;
+  const cells = [];
+  const tbody = el("tbody", {}, g.rows.map((row, r) => el("tr", {}, row.map((v, c) => {
+    const b = el("button", { onclick: () => { if (locked) return; const k = r + "," + c;
+      marked.has(k) ? marked.delete(k) : marked.add(k); b.classList.toggle("mark"); } }, v);
+    cells.push({ r, c, b }); return el("td", {}, b); }))));
+  const btn = el("button", { class: "btn", onclick: check }, "Check");
+  const fb = el("div", { class: "fb" });
+  app.append(el("p", { class: "hint" }, g.hint),
+    el("div", { class: "scroll" }, el("table", {}, el("thead", {}, el("tr", {}, g.head.map(h => el("th", {}, h)))), tbody)),
+    btn, fb, backToMenu());
+  function hits(e, r, c) { return e.r === r && (e.c === null || e.c === c); }
+  function check() {
+    locked = true; btn.disabled = true;
+    const items = g.errors.map((e, i) => ({ item: (i + 1) + " · " + e.why.split(" →")[0],
+      correct: [...marked].some(k => { const [r, c] = k.split(",").map(Number); return hits(e, r, c); }) }));
+    let falseAlarms = 0;
+    for (const { r, c, b } of cells) {
+      const isErr = g.errors.some(e => hits(e, r, c)), m = marked.has(r + "," + c);
+      b.classList.remove("mark");
+      if (m && isErr) b.classList.add("found");
+      else if (m) { b.classList.add("false"); falseAlarms++; }
+    }
+    // missed errors: dashed red outline (for the duplicate row: its first cell)
+    g.errors.forEach((e, i) => { if (items[i].correct) return;
+      for (const x of cells) if (x.r === e.r && x.c === (e.c === null ? 0 : e.c)) x.b.classList.add("miss"); });
+    fb.append(score(items), el("ul", {}, g.errors.map((e, i) => el("li", {},
+      el("span", { class: items[i].correct ? "ok-t" : "ko-t" }, items[i].correct ? "✓ " : "✗ "),
+      "Row " + (e.r + 1) + ": " + e.why))),
+      falseAlarms ? el("p", { class: "small" }, falseAlarms + " cell(s) you marked were actually fine.") : null);
+    finish(n, items, fb);
+  }
+}
+
+// ---------- one card at a time ----------
+function gSort(n, g) {
+  const order = shuffle(g.cards.map((c, i) => i));
+  const ans = [];
+  let k = 0;
+  const card = el("div", { class: "card" });
+  const prog = el("div", { class: "prog" });
+  const buttons = el("div", { class: "two" }, g.options.map((o, i) =>
+    el("button", { style: "background:" + (i ? "#454B6A" : "#66ABB7"), onclick: () => pick(o) }, o)));
+  const area = el("div", {}, card, buttons, prog);
+  const fb = el("div", { class: "fb" });
+  app.append(el("p", { class: "hint" }, g.hint), area, fb, backToMenu());
+  show();
+  function show() { card.textContent = g.cards[order[k]][0]; prog.textContent = "Card " + (k + 1) + " of " + g.cards.length; }
+  function pick(o) {
+    ans[order[k]] = o; k++;
+    if (k < g.cards.length) return show();
+    area.remove();
+    const items = g.cards.map((c, i) => ({ item: (i + 1) + " · " + c[0], correct: ans[i] === c[1] }));
+    fb.append(score(items), el("ul", {}, g.cards.map((c, i) => el("li", {},
+      el("span", { class: items[i].correct ? "ok-t" : "ko-t" }, items[i].correct ? "✓ " : "✗ "),
+      c[0] + " → ", el("b", {}, c[1])))), el("p", { class: "small" }, g.trap));
+    finish(n, items, fb);
+  }
+}
+
+// ---------- one choice per pair ----------
+function gChoice(n, g) {
+  const ans = {};
+  let locked = false;
+  const blocks = g.items.map(([k, a, b], i) => {
+    const btns = g.options.map(o => el("button", { onclick: () => { if (locked) return; ans[i] = o;
+      btns.forEach(x => x.classList.toggle("on", x.textContent === o)); } }, o));
+    return el("div", { class: "pair" }, el("b", {}, "Pair " + k), el("div", { class: "rec" }, a), el("div", { class: "rec" }, b),
+      el("div", { class: "opts" }, btns));
+  });
+  const btn = el("button", { class: "btn", onclick: check }, "Check");
+  const fb = el("div", { class: "fb" });
+  app.append(el("p", { class: "hint" }, g.hint), blocks, btn, fb, backToMenu());
+  function check() {
+    locked = true; btn.disabled = true;
+    const items = g.items.map(([k, a, b, ok], i) => ({ item: (i + 1) + " · pair " + k, correct: ok.includes(ans[i]) }));
+    fb.append(score(items), el("ul", {}, g.items.map(([k, a, b, ok, why], i) => el("li", {},
+      el("span", { class: items[i].correct ? "ok-t" : "ko-t" }, items[i].correct ? "✓ " : "✗ "),
+      el("b", {}, "Pair " + k + ": " + ok[0]), " – " + why))));
+    finish(n, items, fb);
+  }
+}
+
+// ======================================================================
+// Link to the teacher page
+// ======================================================================
+async function poll() {
+  if (offline) return;
+  try {
+    const st = await API.getState();
+    fails = 0;
+    if (st.session !== session) { session = st.session; shown = -1; }
+    if (st.game !== shown && !(shown > 0 && st.game === shown)) {
+      if (st.game === 0) showWaiting();
+      else if (done[session + ":" + st.game]) showDone(st.game);
+      else renderGame(st.game);
+    }
+  } catch (e) {
+    fails++;
+    if (fails === 3 && shown <= 0) { offline = true; showMenu(); }
+  }
+}
+if (offline) showMenu();
+else { showWaiting(); poll(); setInterval(poll, (window.CONFIG.POLL_SECONDS || 3) * 1000); }
+</script>
+</body>
+</html>

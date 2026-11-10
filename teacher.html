@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini-games · teacher page</title>
+<style>
+  :root { --txt:#3C3C41; --gold:#BAA874; --navy:#454B6A; --teal:#66ABB7; --yel:#F1E790; --mint:#D6E2DE;
+          --cream:#F7F4F1; --red:#C00D47; --green:#3E8E5E; --grey:#6B6B70; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Calibri, "Segoe UI", Roboto, Arial, sans-serif; color:var(--txt); background:#fff; }
+  header { background:var(--navy); color:#fff; padding:14px 24px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  header h1 { font-size:22px; margin:0; flex:1; }
+  header input { font:inherit; padding:7px 10px; border-radius:8px; border:0; width:150px; }
+  .wrap { display:grid; grid-template-columns:280px 1fr; gap:24px; padding:20px 24px; }
+  @media (max-width:800px) { .wrap { grid-template-columns:1fr; } }
+  .games button { display:block; width:100%; text-align:left; font:inherit; font-size:16px; padding:11px 12px; margin:0 0 8px;
+                  border:2px solid var(--mint); border-radius:10px; background:var(--cream); cursor:pointer; }
+  .games button.on { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .games button.view { border-color:var(--gold); }
+  .qr { margin-top:18px; text-align:center; background:var(--cream); border-radius:12px; padding:14px; }
+  .qr #qrcode { display:inline-block; background:#fff; padding:10px; }
+  .qr .url { font-size:13px; word-break:break-all; margin-top:8px; color:var(--grey); }
+  h2 { color:var(--gold); font-size:30px; margin:0 0 4px; }
+  .meta { color:var(--grey); font-size:18px; margin-bottom:18px; }
+  .meta b { color:var(--navy); font-size:26px; }
+  .row { display:grid; grid-template-columns:minmax(200px, 38%) 1fr 70px; gap:14px; align-items:center; margin:10px 0; font-size:19px; }
+  .bar { height:30px; background:var(--cream); border-radius:8px; overflow:hidden; }
+  .bar > div { height:100%; border-radius:8px; transition:width .6s; }
+  .pct { font-weight:800; font-size:22px; text-align:right; }
+  .tools { margin-top:22px; display:flex; gap:10px; flex-wrap:wrap; }
+  .tools button { font:inherit; padding:9px 14px; border-radius:10px; border:2px solid var(--mint); background:#fff; cursor:pointer; }
+  .tools button.danger { border-color:var(--red); color:var(--red); }
+  .msg { color:var(--red); font-weight:700; margin-top:10px; min-height:1.2em; }
+  .empty { color:var(--grey); font-size:18px; padding:30px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Data Integration · teacher page</h1>
+  <label>PIN <input id="pin" type="password" placeholder="teacher PIN"></label>
+</header>
+<div class="wrap">
+  <div>
+    <div class="games" id="games"></div>
+    <div class="qr"><div id="qrcode"></div><div class="url" id="url"></div></div>
+  </div>
+  <div>
+    <h2 id="rtitle">Results</h2>
+    <div class="meta" id="meta"></div>
+    <div id="rows"></div>
+    <div class="tools">
+      <button id="hide">Hide / show results</button>
+      <button id="newsess" class="danger">New session (reset everything)</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+// Game names (must match index.html)
+const NAMES = { 0: "Waiting (no game)", 1: "1 · Data type", 2: "2 · Spot the errors", 3: "3 · OLTP or OLAP",
+                4: "4 · Data → format", 5: "5 · Same person?", 6: "6 · Name it!" };
+const $ = id => document.getElementById(id);
+let current = 0, viewing = 0, hidden = false, armed = false;
+
+// PIN remembered only for this browser tab
+try { $("pin").value = sessionStorage.getItem("di_pin") || ""; } catch (e) {}
+$("pin").addEventListener("change", () => { try { sessionStorage.setItem("di_pin", $("pin").value); } catch (e) {} });
+
+// QR code pointing to the student page (same folder, index.html)
+const studentUrl = location.href.replace(/teacher\.html.*$/, "");
+$("url").textContent = studentUrl;
+try { new QRCode($("qrcode"), { text: studentUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M }); }
+catch (e) { $("qrcode").textContent = "QR not available (no connection)"; }
+
+function msg(t) { $("msg").textContent = t || ""; }
+
+function drawButtons() {
+  $("games").replaceChildren(...Object.entries(NAMES).map(([n, name]) => {
+    const b = document.createElement("button");
+    b.textContent = (+n === current ? "▶ " : "") + name;
+    if (+n === current) b.classList.add("on");
+    else if (+n === viewing) b.classList.add("view");
+    b.onclick = async () => {
+      msg("");
+      try { const st = await API.setGame($("pin").value, +n); current = st.game; viewing = current; hidden = false; drawButtons(); refresh(); }
+      catch (e) { msg(String(e.message).includes("wrong pin") ? "Wrong PIN." : "Connection error: " + e.message); }
+    };
+    return b;
+  }));
+}
+
+async function refresh() {
+  if (!API.enabled) { $("meta").textContent = "config.js is empty: add the Supabase URL and key."; return; }
+  try {
+    const st = await API.getState();
+    if (st.game !== current) { current = st.game; if (current) viewing = current; drawButtons(); }
+    $("rtitle").textContent = viewing ? "Results · game " + NAMES[viewing] : "Results";
+    if (!viewing) { $("meta").textContent = ""; $("rows").replaceChildren(Object.assign(document.createElement("div"),
+      { className: "empty", textContent: "Choose a game on the left to unlock it on the phones." })); return; }
+    const r = await API.results(viewing);
+    $("meta").innerHTML = "<b>" + r.participants + "</b> students submitted";
+    if (hidden) { $("rows").replaceChildren(Object.assign(document.createElement("div"),
+      { className: "empty", textContent: "Results hidden – press “Hide / show” when time is up." })); return; }
+    $("rows").replaceChildren(...r.items.map(it => {
+      const p = it.n ? Math.round(100 * it.correct / it.n) : 0;
+      const row = document.createElement("div"); row.className = "row";
+      const color = p >= 75 ? "var(--green)" : p >= 50 ? "var(--gold)" : "var(--red)";
+      row.innerHTML = `<div></div><div class="bar"><div style="width:${p}%;background:${color}"></div></div><div class="pct">${p}%</div>`;
+      row.firstChild.textContent = it.item.replace(/^\d+ · /, "");
+      return row;
+    }));
+    if (!r.items.length) $("rows").replaceChildren(Object.assign(document.createElement("div"),
+      { className: "empty", textContent: "No answers yet…" }));
+  } catch (e) { $("meta").textContent = "No connection – retrying…"; }
+}
+
+$("hide").onclick = () => { hidden = !hidden; refresh(); };
+$("newsess").onclick = async () => {
+  if (!armed) { armed = true; $("newsess").textContent = "Sure? Click again"; setTimeout(() => { armed = false;
+    $("newsess").textContent = "New session (reset everything)"; }, 4000); return; }
+  armed = false; $("newsess").textContent = "New session (reset everything)";
+  try { const st = await API.newSession($("pin").value); current = st.game; viewing = 0; drawButtons(); refresh(); msg(""); }
+  catch (e) { msg(String(e.message).includes("wrong pin") ? "Wrong PIN." : "Error: " + e.message); }
+};
+
+drawButtons(); refresh();
+setInterval(refresh, (window.CONFIG.POLL_SECONDS || 3) * 1000);
+</script>
+</body>
+</html>
