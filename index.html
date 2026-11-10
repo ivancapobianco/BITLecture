@@ -189,7 +189,7 @@ function showMenu() {
     el("div", { class: "menu" }, Object.entries(GAMES).map(([n, g]) =>
       el("button", { onclick: () => renderGame(+n) }, "Game " + n + " · " + g.title))));
 }
-function backToMenu() { return offline ? el("button", { class: "linkbtn", onclick: showMenu }, "← all games") : null; }
+function backToMenu() { return offline ? el("button", { class: "linkbtn", onclick: showMenu }, "← all games") : document.createTextNode(""); }
 
 function renderGame(n) {
   shown = n;
@@ -303,7 +303,7 @@ function gErrors(n, g) {
     fb.append(score(items), el("ul", {}, g.errors.map((e, i) => el("li", {},
       el("span", { class: items[i].correct ? "ok-t" : "ko-t" }, items[i].correct ? "✓ " : "✗ "),
       "Row " + (e.r + 1) + ": " + e.why))),
-      falseAlarms ? el("p", { class: "small" }, falseAlarms + " cell(s) you marked were actually fine.") : null);
+      falseAlarms ? el("p", { class: "small" }, falseAlarms + " cell(s) you marked were actually fine.") : "");
     finish(n, items, fb);
   }
 }
@@ -346,7 +346,7 @@ function gChoice(n, g) {
   });
   const btn = el("button", { class: "btn", onclick: check }, "Check");
   const fb = el("div", { class: "fb" });
-  app.append(el("p", { class: "hint" }, g.hint), blocks, btn, fb, backToMenu());
+  app.append(el("p", { class: "hint" }, g.hint), ...blocks, btn, fb, backToMenu());
   function check() {
     locked = true; btn.disabled = true;
     const items = g.items.map(([k, a, b, ok], i) => ({ item: (i + 1) + " · pair " + k, correct: ok.includes(ans[i]) }));
